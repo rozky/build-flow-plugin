@@ -65,10 +65,6 @@ public class BuildFlow extends Project<BuildFlow, FlowRun> implements TopLevelIt
 
     private String dsl;
 
-    private String remoteDsl;
-
-    private String dslParam;
-
     public BuildFlow(ItemGroup parent, String name) {
         super(parent, name);
     }
