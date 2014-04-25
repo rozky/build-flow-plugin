@@ -2,7 +2,7 @@ Jenkins Build Flow Plugin
 =========================
 
 Fork of https://github.com/jenkinsci/build-flow-plugin with additional DSL for defining a flow in form of a directional
-graph where vertices defines jobs to run and edges represents dependencies between jobs. It only works for non cyclic
+graph where vertices defines jobs to run and edges represents dependencies between jobs. It only works for non cyclic 
 graphs.
 
 ### Usage
@@ -48,3 +48,4 @@ then it can be used to create a graph like this:
 ```
 build(graph("http://jenkins.example.com/example-graph.properties"), "job5")
 ```
+
