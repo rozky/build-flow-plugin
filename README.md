@@ -1,31 +1,50 @@
 Jenkins Build Flow Plugin
 =========================
 
-This Jenkins plugin allows managing jobs orchestration using a dedicated DSL, extracting the flow logic from jobs.
+Fork of https://github.com/jenkinsci/build-flow-plugin with additional DSL for defining a flow in form of a directional
+graph where vertices defines jobs to run and edges represents dependencies between jobs. It only works for non cyclic 
+graphs.
 
-[![Build Status](https://buildhive.cloudbees.com/job/jenkinsci/job/build-flow-plugin/badge/icon)](https://buildhive.cloudbees.com/job/jenkinsci/job/build-flow-plugin/)
+### Usage
 
-## Sample Build Flow Content ##
+#### Start build from the root job
+Assume a graph ```job0 -> job1 -> job2``` and we want to start from root ```job0```
+```
+build(graph(["job0", "job1"], ["job1", "job2"]), "job0")
+```
 
-    parallel (
-      {
-        guard {
-            build("job1A")
-        } rescue {
-            build("job1B")
-        }
-      },
-      {
-        retry 3, {
-            build("job2")
-        }
-      }
-    )
+#### Start build from a non root job
+2nd argument to the build method represents a job(s) to start build from (all jobs on the right side of those jobs
+will not be executed)
+```
+build(graph(["job0", "job1"], ["job1", "job2"]), "job1")
+```
 
-See the documentation and release notes at [Build Flow Plugin](https://wiki.jenkins-ci.org/display/JENKINS/Build+Flow+Plugin) on the Jenkins Wiki for more information.
+#### Read start job from a build param
+Assume there is build param ```START_JOB= "job2"```
+```
+build(graph(["job0", "job1"], ["job1", "job2"]), getParamValue("START_JOB"))
+```
 
-Other informations:
-* Bug Tracker for known issues and expectations : [Jenkins Build Flow Component](https://issues.jenkins-ci.org/browse/JENKINS/component/16533)
-* Discussions on this plugin are hosted on  [jenkins-user mailing list](https://wiki.jenkins-ci.org/display/JENKINS/Mailing+Lists)
+#### Read start jobs from a build list parameter
+Assume there is a build param ```START_JOBS="job1,job2"```
+```
+build(graph(["job0", "job1"], ["job1", "job2"]), getParamValues("START_JOBS"))
+```
 
+#### Load a graph definition from java property file
 
+Assume there is a property file at ```http://jenkins.example.com/example-graph.properties``` location with
+the following content where key is a source(upstream) job and value is comma separated list of target(downstream) jobs:
+
+```
+job0=job1,job2,job5
+job2=job3
+job5=job6,job7
+```
+
+then it can be used to create a graph like this:
+
+```
+build(graph("http://jenkins.example.com/example-graph.properties"), "job5")
+```
