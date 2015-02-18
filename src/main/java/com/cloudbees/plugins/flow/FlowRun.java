@@ -26,6 +26,7 @@ package com.cloudbees.plugins.flow;
 
 import static hudson.model.Result.FAILURE;
 import static hudson.model.Result.SUCCESS;
+import hudson.Util;
 import hudson.model.Action;
 import hudson.model.Build;
 import hudson.model.BuildListener;
@@ -34,6 +35,9 @@ import hudson.model.Run;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -56,6 +60,9 @@ public class FlowRun extends Build<BuildFlow, FlowRun> {
     private static final Logger LOGGER = Logger.getLogger(FlowRun.class.getName());
     
     private String dsl;
+    private String dslFile;
+
+    private boolean buildNeedsWorkspace;
 
     private JobInvocation.Start startJob;
 
@@ -83,6 +90,8 @@ public class FlowRun extends Build<BuildFlow, FlowRun> {
             startJob = new JobInvocation.Start(this);
         }
         this.dsl = job.getDsl();
+        this.dslFile = job.getDslFile();
+        this.buildNeedsWorkspace = job.getBuildNeedsWorkspace();
         startJob.buildStarted(this);
         jobsGraph.addVertex(startJob);
         state.set(new FlowState(SUCCESS, startJob));
@@ -95,6 +104,12 @@ public class FlowRun extends Build<BuildFlow, FlowRun> {
 
     /* package */ Run waitForCompletion(JobInvocation job) throws ExecutionException, InterruptedException {
         job.waitForCompletion();
+        getState().setResult(job.getResult());
+        return job.getBuild();
+    }
+
+    /* package */ Run waitForFinalization(JobInvocation job) throws ExecutionException, InterruptedException {
+        job.waitForFinalization();
         getState().setResult(job.getResult());
         return job.getBuild();
     }
@@ -156,14 +171,67 @@ public class FlowRun extends Build<BuildFlow, FlowRun> {
 
     @Override
     public void run() {
-        execute(new RunnerImpl(dsl));
+        if (buildNeedsWorkspace) {
+            run(new BuildWithWorkspaceRunnerImpl(dsl, dslFile));
+        } else {
+            execute(new FlyweightTaskRunnerImpl(dsl));
+        }
     }
-    
-    protected class RunnerImpl extends RunExecution {
+
+    protected class BuildWithWorkspaceRunnerImpl extends AbstractRunner {
+
+        private final String dsl;
+        private final String dslFile;
+
+        public BuildWithWorkspaceRunnerImpl(String dsl, String dslFile) {
+            this.dsl = dsl;
+            this.dslFile = dslFile;
+        }
+
+        protected Result doRun(BuildListener listener) throws Exception {
+            if(!preBuild(listener, project.getPublishersList()))
+                return FAILURE;
+
+            try {
+                setResult(SUCCESS);
+                if (dslFile != null) {
+                    listener.getLogger().printf("[build-flow] reading DSL from file '%s'\n", dslFile);
+                    String fileContent = getWorkspace().child(dslFile).readToString();
+                    new FlowDSL().executeFlowScript(FlowRun.this, fileContent, listener);
+                } else {
+                    new FlowDSL().executeFlowScript(FlowRun.this, dsl, listener);
+                }
+            } finally {
+                boolean failed=false;
+                for( int i=buildEnvironments.size()-1; i>=0; i-- ) {
+                    if (!buildEnvironments.get(i).tearDown(FlowRun.this,listener)) {
+                        failed=true;
+                    }
+                }
+                if (failed) return Result.FAILURE;
+            }
+            return getState().getResult();
+        }
+
+        @Override
+        public void post2(BuildListener listener) throws IOException, InterruptedException {
+            if(!performAllBuildSteps(listener, project.getPublishersList(), true))
+                setResult(FAILURE);
+        }
+
+        @Override
+        public void cleanUp(BuildListener listener) throws Exception {
+            performAllBuildSteps(listener, project.getPublishersList(), false);
+            FlowRun.this.startJob.buildCompleted();
+            super.cleanUp(listener);
+        }
+    }
+
+    protected class FlyweightTaskRunnerImpl extends RunExecution {
 
         private final String dsl;
 
-        public RunnerImpl(String dsl) {
+        public FlyweightTaskRunnerImpl(String dsl) {
             this.dsl = dsl;
         }
 

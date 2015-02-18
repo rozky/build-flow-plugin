@@ -37,7 +37,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * @author <a href="mailto:nicolas.deloof@gmail.com">Nicolas De Loof</a>
  */
-@Extension
+@Extension(optional = true)
 public class FlowDownStreamRunDeclarer extends DownStreamRunDeclarer {
 
     @Override
@@ -48,13 +48,16 @@ public class FlowDownStreamRunDeclarer extends DownStreamRunDeclarer {
             return getOutgoingEdgeRuns(f, f.getStartJob());
         }
 
-        FlowCause flow = (FlowCause) r.getCause(FlowCause.class);
-        if (flow != null) {
-            FlowRun f = flow.getFlowRun();
-            return getOutgoingEdgeRuns(f, flow.getAssociatedJob());
+        List<Run> runs = Collections.emptyList();
+        FlowCause cause = (FlowCause) r.getCause(FlowCause.class);
+        FlowRun f;
+        while (runs.isEmpty() && cause != null) {
+            f = cause.getFlowRun();
+            runs = getOutgoingEdgeRuns(f, cause.getAssociatedJob());
+            cause = (FlowCause) cause.getFlowRun().getCause(FlowCause.class);
         }
 
-        return Collections.emptyList();
+        return runs;
     }
 
     private List<Run> getOutgoingEdgeRuns(FlowRun f, JobInvocation start) throws ExecutionException, InterruptedException {

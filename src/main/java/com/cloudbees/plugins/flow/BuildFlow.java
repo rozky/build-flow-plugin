@@ -64,6 +64,10 @@ public class BuildFlow extends Project<BuildFlow, FlowRun> implements TopLevelIt
     private final FlowIcon icon = new FlowIcon();
 
     private String dsl;
+    private String dslFile;
+
+    private boolean buildNeedsWorkspace;
+
 
     public BuildFlow(ItemGroup parent, String name) {
         super(parent, name);
@@ -77,12 +81,35 @@ public class BuildFlow extends Project<BuildFlow, FlowRun> implements TopLevelIt
         this.dsl = dsl;
     }
 
+    public boolean getBuildNeedsWorkspace() {
+        return buildNeedsWorkspace;
+    }
+
+    public void setBuildNeedsWorkspace(boolean buildNeedsWorkspace) {
+        this.buildNeedsWorkspace = buildNeedsWorkspace;
+    }
+
+    public String getDslFile() {
+        return dslFile;
+    }
+
+    public void setDslFile(String dslFile) {
+        this.dslFile = dslFile;
+    }
+
     @Override
     protected void submit(StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException, FormException {
         super.submit(req, rsp);
         JSONObject json = req.getSubmittedForm();
-        if (Jenkins.getInstance().hasPermission(Jenkins.RUN_SCRIPTS)) { 
+        this.buildNeedsWorkspace = json.containsKey("buildNeedsWorkspace");
+        if (Jenkins.getInstance().hasPermission(Jenkins.RUN_SCRIPTS)) {
             this.dsl = json.getString("dsl");
+            if (this.buildNeedsWorkspace) {
+                JSONObject o = json.getJSONObject("buildNeedsWorkspace");
+                this.dslFile = Util.fixEmptyAndTrim(o.getString("dslFile"));
+            } else {
+                this.dslFile = null;
+            }
         }
     }
 
