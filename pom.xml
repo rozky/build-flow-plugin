@@ -32,7 +32,7 @@
 
   <groupId>com.cloudbees.plugins</groupId>
   <artifactId>build-flow-plugin</artifactId>
-  <version>0.18-SNAPSHOT</version>
+  <version>0.18-GT-SNAPSHOT</version>
   <packaging>hpi</packaging>
   <name>CloudBees Build Flow plugin</name>
   <description>Manages job orchestration as a build flow</description>
@@ -55,6 +55,29 @@
     <url>https://github.com/jenkinsci/build-flow-plugin</url>
     <tag>HEAD</tag>
   </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <gt.nexus.releases.id>GTRELEASE</gt.nexus.releases.id>
+        <gt.nexus.releases.name>Gumtree Internal Releases</gt.nexus.releases.name>
+        <gt.nexus.releases.url>http://nexus.ci.gumtree.com/nexus/content/repositories/releases/</gt.nexus.releases.url>
+    </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>${gt.nexus.releases.id}</id>
+            <name>${gt.nexus.releases.name}</name>
+            <url>${gt.nexus.releases.url}</url>
+        </repository>
+        <snapshotRepository>
+            <id>GTSNAPSHOTS</id>
+            <name>Gumtree Internal Snapshots</name>
+            <url>http://nexus.ci.gumtree.com/nexus/content/repositories/snapshots/</url>
+            <uniqueVersion>false</uniqueVersion>
+        </snapshotRepository>
+    </distributionManagement>
 
     <build>
         <plugins>
