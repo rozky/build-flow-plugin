@@ -21,7 +21,7 @@ class FlowGraphExecutor {
     /**
      * Jobs that must be build during the build execution
      */
-    private final List<String> mustBuildJobs
+    private final Collection<String> mustBuildJobs
 
     private final runningBuilds = new HashSet<String>()
     private final waitingJobs = new HashSet<String>()
@@ -33,17 +33,14 @@ class FlowGraphExecutor {
     FlowGraphExecutor(FlowDelegate flowDSL, FlowGraph graph) {
         this.flowDSL = flowDSL
         this.graph = graph
-        if ("EVERYTHING" == graph.getBuildMode()) {
-            this.mustBuildJobs = filterOnlyExistingJobs(graph.getVertices())
-        } else {
-            this.mustBuildJobs = filterOnlyExistingJobs(graph.getStartJobs())
-        }
+        this.mustBuildJobs = filterOnlyExistingJobs(graph.getMustBuildJobs())
+        addToBuildQueue(filterOnlyExistingJobs(graph.getStartJobs()))
     }
 
     def execute() {
         if (mustBuildJobs != null && mustBuildJobs.size() > 0) {
             logNotice("Starting a graph base build for the graph: " + graph.toString())
-            logNotice("The build will start from " + mustBuildJobs + " vertices")
+            logNotice("It has to built the following " + mustBuildJobs + " vertices")
 
             buildAll(mustBuildJobs)
         }
@@ -66,7 +63,9 @@ class FlowGraphExecutor {
 
     private def addToBuildQueue(Collection<String> jobs) {
         def validJobs = jobs.findAll { v ->
-            !v.trim().isEmpty() && isConnectedToAnyMustBuildJob(v) && !runningBuilds.contains(v) && !completed.contains(v)
+            def isWaitingForExecution = runningBuilds.contains(v)
+            def hasAlreadyBeenExecuted = completed.contains(v)
+            !v.trim().isEmpty() && isConnectedToAnyMustBuildJob(v) && !isWaitingForExecution && !hasAlreadyBeenExecuted
         }
 
         waitingJobs.addAll(validJobs)
@@ -177,7 +176,7 @@ class FlowGraphExecutor {
         pool.awaitTermination(1, TimeUnit.DAYS)
 
         if (failed) {
-            logError("The following builds have failed: " + failedBuilds.join(", "))
+            logError("The following builds have failed: " + failedBuilds.toSet().join(", "))
             flowDSL.flowRun.state.result = Result.FAILURE
             flowDSL.fail()
         } else {
@@ -199,7 +198,22 @@ class FlowGraphExecutor {
      * @param job the jobs to check
      */
     def boolean isConnectedToAnyMustBuildJob(String job) {
-        mustBuildJobs.contains(job) || graph.isParentOfAny(job, mustBuildJobs) || graph.isChildOfAny(job, mustBuildJobs)
+        boolean isConnectedToAnyMustBuildJob;
+
+        if (graph.getBuildDependantJobs()) {
+            if (graph.getBuildDependOnJobs()) {
+                isConnectedToAnyMustBuildJob = graph.isParentOfAny(job, mustBuildJobs) || graph.isChildOfAny(job, mustBuildJobs)
+            } else {
+                isConnectedToAnyMustBuildJob = graph.isChildOfAny(job, mustBuildJobs)
+            }
+        } else {
+            if (graph.getBuildDependOnJobs()) {
+                isConnectedToAnyMustBuildJob = graph.isParentOfAny(job, mustBuildJobs)
+            } else {
+                isConnectedToAnyMustBuildJob = graph.isParentOfAny(job, mustBuildJobs) && graph.isChildOfAny(job, mustBuildJobs)
+            }
+        }
+        return mustBuildJobs.contains(job) || isConnectedToAnyMustBuildJob
     }
 
     private def filterOnlyExistingJobs(Collection<String> jobs) {
