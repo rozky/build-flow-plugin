@@ -26,7 +26,7 @@
 package com.cloudbees.plugins.flow
 
 import hudson.AbortException
-import hudson.console.HyperlinkNote
+import hudson.console.ModelHyperlinkNote
 import hudson.model.*
 import hudson.security.ACL
 import hudson.slaves.EnvironmentVariablesNodeProperty
@@ -221,13 +221,13 @@ public class FlowDelegate {
         // ask for job with name ${name}
         JobInvocation job = new JobInvocation(flowRun, jobName)
         Job p = job.getProject()
-        println("Schedule job " + HyperlinkNote.encodeTo('/'+ p.getUrl(), p.getFullDisplayName()))
+        println("Schedule job " + ModelHyperlinkNote.encodeTo(p))
 
         flowRun.schedule(job, getActions(p,args));
         Run r = job.waitForStart()
 
         def buildDisplayName = r.getFullDisplayName()
-        println("Build " + HyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " started")
+        println("Build " + ModelHyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " started")
 
         if (null == r) {
             println("Failed to start ${jobName}.")
@@ -237,8 +237,8 @@ public class FlowDelegate {
         flowRun.waitForCompletion(job);
         // [JENKINS-22960] wait for build to be finalized.
         flowRun.waitForFinalization(job);
-        def consoleLog = HyperlinkNote.encodeTo('/'+ r.getUrl() + "console", "Show console log")
-        println("Build " + HyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " completed${r.result.isWorseThan(SUCCESS) ? " : " + r.result : ""}. " + consoleLog)
+        def consoleLog = ModelHyperlinkNote.encodeTo('/'+ r.getUrl() + "console", "Show console log")
+        println("Build " + ModelHyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " completed${r.result.isWorseThan(SUCCESS) ? " : " + r.result : ""}. " + consoleLog)
         return job;
     }
 
@@ -352,11 +352,20 @@ public class FlowDelegate {
     def ignore(Result result, closure) {
         statusCheck()
         Result r = flowRun.state.result
+        def closureException = null
         try {
             println("ignore("+result+") {")
             ++indent
             closure()
-        } finally {
+        }
+        catch ( Exception ex ) {
+            closureException = ex
+        }
+        finally {
+            // rethrow if there was a non-JobExecutionFailureException Exception
+            if ( closureException != null && !(closureException instanceof JobExecutionFailureException) ) {
+                throw closureException
+            }
 
             final boolean ignore = flowRun.state.result.isBetterOrEqualTo(result)
             if (ignore) {
@@ -418,7 +427,14 @@ public class FlowDelegate {
 
     def List<FlowState> parallel(Closure ... closures) {
         statusCheck()
-        ExecutorService pool = Executors.newCachedThreadPool()
+        // TODO use NamingThreadFactory since Jenkins 1.541
+        ExecutorService pool = Executors.newCachedThreadPool(new ThreadFactory() {
+            public Thread newThread(Runnable r) {
+                def thread = Executors.defaultThreadFactory().newThread(r);
+                thread.name = "BuildFlow parallel statement thread for " + flowRun.parent.fullName;
+                return thread;
+            }
+        });
         Set<Run> upstream = flowRun.state.lastCompleted
         Set<Run> lastCompleted = Collections.synchronizedSet(new HashSet<Run>())
         def results = new CopyOnWriteArrayList<FlowState>()

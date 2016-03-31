@@ -1,5 +1,6 @@
 package com.cloudbees.plugins.flow
 
+import com.google.common.collect.Lists
 import org.jgrapht.DirectedGraph
 import org.jgrapht.alg.DijkstraShortestPath
 import org.jgrapht.graph.SimpleDirectedGraph
@@ -227,7 +228,7 @@ class FlowGraph {
 
     Collection<String> getStartJobs() {
         if (buildEverything) {
-            return this.underlying.vertexSet()
+            return Lists.newArrayList(this.underlying.vertexSet())
         } else {
             return startJobs
         }
