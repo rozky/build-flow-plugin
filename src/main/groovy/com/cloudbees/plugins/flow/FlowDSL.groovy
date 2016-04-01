@@ -227,7 +227,8 @@ public class FlowDelegate {
         Run r = job.waitForStart()
 
         def buildDisplayName = r.getFullDisplayName()
-        println("Build " + ModelHyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " started")
+        def consoleLog = ModelHyperlinkNote.encodeTo('/'+ r.getUrl() + "console", "Show console log")
+        println("Build " + ModelHyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " started. " + consoleLog)
 
         if (null == r) {
             println("Failed to start ${jobName}.")
@@ -237,7 +238,6 @@ public class FlowDelegate {
         flowRun.waitForCompletion(job);
         // [JENKINS-22960] wait for build to be finalized.
         flowRun.waitForFinalization(job);
-        def consoleLog = ModelHyperlinkNote.encodeTo('/'+ r.getUrl() + "console", "Show console log")
         println("Build " + ModelHyperlinkNote.encodeTo('/'+ r.getUrl(), buildDisplayName) + " completed${r.result.isWorseThan(SUCCESS) ? " : " + r.result : ""}. " + consoleLog)
         return job;
     }
